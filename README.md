@@ -1,6 +1,6 @@
 # AmberolMac
 
-A native, and (hopefully) minimal-resource audio player for macOS, inspired by the minimalist design philosophy of [Amberol](https://gitlab.gnome.org/Bassi/amberol).
+A native, and (hopefully) minimal-resource audio player for macOS, inspired by the minimalist design philosophy of [Amberol](https://github.com/adamjatim/amberol?tab=readme-ov-file).
 
 ## Features
 
