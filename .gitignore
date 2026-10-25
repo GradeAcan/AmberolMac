@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Fichiers de build / dossiers temporaires
+build/
+*.app/
+.build/
