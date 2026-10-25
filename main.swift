@@ -109,12 +109,13 @@ class AudioEngine: ObservableObject {
             timeObserver = nil
         }
 
-        let asset = AVURLAsset(url: song.url)
+        let asset = AVURLAsset(url: song.url, options: [AVURLAssetPreferPreciseDurationAndTimingKey: true])
         let playerItem = AVPlayerItem(asset: asset)
 
         if player == nil {
             player = AVPlayer(playerItem: playerItem)
         } else {
+            player?.seek(to: .zero)
             player?.replaceCurrentItem(with: playerItem)
         }
 
@@ -125,33 +126,30 @@ class AudioEngine: ObservableObject {
 
         Task {
             let finalDuration: Double
+
             do {
                 let durationTime = try await asset.load(.duration)
-                var durSec = CMTimeGetSeconds(durationTime)
+                let seconds = CMTimeGetSeconds(durationTime)
 
-                if durSec > 1800 {
-                    if durationTime.timescale > 0 {
-                        durSec = Double(durationTime.value) / 1000.0
-                        if durSec > 1800 {
-                            durSec = Double(durationTime.value) / Double(durationTime.timescale)
-                        }
-                    }
+                print("🎵 File:", song.url.lastPathComponent)
+                print("🎵 Reported duration:", seconds)
+
+                if durationTime.isNumeric,
+                   seconds.isFinite,
+                   seconds > 0 {
+                    finalDuration = seconds
+                } else {
+                    finalDuration = 1.0
                 }
-
-                if durSec > 3600 || durSec.isNaN || durSec <= 0 {
-                    durSec = playerItem.duration.seconds
-                    if durSec.isNaN || durSec <= 0 || durSec > 3600 {
-                        durSec = 152.0
-                    }
-                }
-
-                finalDuration = durSec
             } catch {
                 finalDuration = 1.0
             }
+
             await MainActor.run {
                 self.duration = finalDuration
+                self.updateNowPlayingInfo()
             }
+
         }
 
         setupTimeObserver()
@@ -215,16 +213,40 @@ class AudioEngine: ObservableObject {
         currentIndex = nextIndex
     }
 
+
     private func setupTimeObserver() {
-        let interval = CMTime(seconds: 1, preferredTimescale: CMTimeScale(NSEC_PER_SEC))
-        timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+        let interval = CMTime(
+            seconds: 1,
+            preferredTimescale: CMTimeScale(NSEC_PER_SEC)
+        )
+
+        timeObserver = player?.addPeriodicTimeObserver(
+            forInterval: interval,
+            queue: .main
+        ) { [weak self] time in
             guard let self = self else { return }
+
             let currentTime = CMTimeGetSeconds(time)
-            if !currentTime.isNaN {
-                self.progress = currentTime
+
+            if time.isNumeric, currentTime.isFinite {
+                self.progress = max(
+                    0,
+                    min(currentTime, self.duration)
+                )
+
+                var nowPlayingInfo =
+                    MPNowPlayingInfoCenter.default().nowPlayingInfo ?? [:]
+
+                nowPlayingInfo[
+                    MPNowPlayingInfoPropertyElapsedPlaybackTime
+                ] = self.progress
+
+                MPNowPlayingInfoCenter.default().nowPlayingInfo =
+                    nowPlayingInfo
             }
         }
     }
+
 
     func togglePlayPause() {
         guard let player = player else {
@@ -370,7 +392,7 @@ struct ContentView: View {
                 Image(nsImage: art)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
-                    .blur(radius: 35)
+                    .blur(radius: 40)
                     .opacity(0.5)
             } else {
                 LinearGradient(colors: [.black, Color(nsColor: .windowBackgroundColor)], startPoint: .top, endPoint: .bottom)
